@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+@theme {
+  /* Primary Brand Colors */
+  --color-brand-accent: #4f46e5;
+  --color-brand-success: #10b981;
+  --color-brand-negative: #fb7185;
+
+  /* UI Surfaces */
+  --color-ui-bg: #0f172a;
+  --color-ui-card: #1e293b;
+  --color-ui-input: #020617;
+  --color-ui-border: rgba(30, 41, 59, 0.5);
+
+  /* Typography */
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
+}
+
+/* Base styles for dark theme */
+body {
+  background-color: var(--color-ui-bg);
+  color: var(--color-text-primary);
+}
+
+/* Refined Glassmorphism (UPDATED) */
+.glass-card {
+  background: rgba(30, 41, 59, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
