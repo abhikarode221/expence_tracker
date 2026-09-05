@@ -1,29 +1,52 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useMemo } from 'react';
 import axios from 'axios';
-import { Search, Trash2, User, CheckCircle2 } from 'lucide-react';
+import { Search, Trash2, User, CheckCircle2, Calendar, History, ChevronDown } from 'lucide-react';
 import { ExpenseContext } from '../context/ExpenseContext';
 import SubscriptionList from '../components/SubscriptionList';
 
+// Helper functions for month key parsing and formatting
+const getMonthKey = (dateStr) => {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+};
+
+const getMonthLabel = (monthKey) => {
+  if (!monthKey) return '';
+  const [year, month] = monthKey.split('-');
+  if (!year || !month) return '';
+  const d = new Date(parseInt(year, 10), parseInt(month, 10) - 1, 1);
+  return d.toLocaleString('default', { month: 'long', year: 'numeric' });
+};
+
 const Ledger = () => {
-  // 1. Initialize states with safe defaults (empty arrays/strings)
+  // 1. Initialize states with safe defaults
   const [activeTab, setActiveTab] = useState('shared');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('All');
+  const [selectedMonth, setSelectedMonth] = useState('current'); // 'current', 'all', or 'YYYY-MM'
   const [subscriptions, setSubscriptions] = useState([]);
   const [personalExpenses, setPersonalExpenses] = useState([]);
   const [loading, setLoading] = useState(false);
   
-  // Use context with fallbacks
+  // Context
   const { sharedExpenses = [], fetchSharedExpenses, currency = "INR" } = useContext(ExpenseContext) || {};
-
   const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
 
-  // Helpers / Handlers
+  // Compute Current Month Key & Label
+  const now = new Date();
+  const currentMonthKey = getMonthKey(now);
+  const currentMonthLabel = getMonthLabel(currentMonthKey);
+
+  // Handlers
   const fetchSubscriptions = async () => {
     setLoading(true);
     try {
       const config = { headers: { Authorization: `Bearer ${userInfo?.token}` } };
-      const { data } = await axios.get('http://localhost:5000/api/subscriptions', config);
+      const { data } = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/subscriptions`, config);
       setSubscriptions(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Fetch Subscriptions Error:", error);
@@ -36,7 +59,7 @@ const Ledger = () => {
   const deleteSubscription = async (id) => {
     try {
       const config = { headers: { Authorization: `Bearer ${userInfo?.token}` } };
-      await axios.delete(`http://localhost:5000/api/subscriptions/${id}`, config);
+      await axios.delete(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/subscriptions/${id}`, config);
       fetchSubscriptions();
     } catch (error) {
       console.error("Delete Subscription Error:", error);
@@ -47,7 +70,7 @@ const Ledger = () => {
     setLoading(true);
     try {
       const config = { headers: { Authorization: `Bearer ${userInfo?.token}` } };
-      const { data } = await axios.get('http://localhost:5000/api/expenses/my-expenses', config);
+      const { data } = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/expenses/my-expenses`, config);
       setPersonalExpenses(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Fetch Personal Expenses Error:", error);
@@ -61,7 +84,7 @@ const Ledger = () => {
     if (!window.confirm("Are you sure you want to delete this expense?")) return;
     try {
       const config = { headers: { Authorization: `Bearer ${userInfo?.token}` } };
-      await axios.delete(`http://localhost:5000/api/expenses/${id}`, config);
+      await axios.delete(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/expenses/${id}`, config);
       if (activeTab === 'personal') {
         fetchPersonalExpenses();
       } else if (activeTab === 'shared') {
@@ -75,33 +98,72 @@ const Ledger = () => {
   const settleExpense = async (id) => {
     try {
       const config = { headers: { Authorization: `Bearer ${userInfo?.token}` } };
-      await axios.put(`http://localhost:5000/api/expenses/${id}/settle`, {}, config);
+      await axios.put(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/expenses/${id}/settle`, {}, config);
       fetchSharedExpenses?.();
     } catch (error) {
       console.error("Settle Expense Error:", error);
     }
   };
 
-  // 2. Fetch data based on active tab
+  // 2. Fetch initial data for all expense sources to populate history options
+  useEffect(() => {
+    fetchSharedExpenses?.();
+    fetchPersonalExpenses();
+    fetchSubscriptions();
+  }, []);
+
   useEffect(() => {
     if (activeTab === 'shared') {
       fetchSharedExpenses?.();
     } else if (activeTab === 'recurring') {
-      Promise.resolve().then(() => fetchSubscriptions());
+      fetchSubscriptions();
     } else if (activeTab === 'personal') {
-      Promise.resolve().then(() => fetchPersonalExpenses());
+      fetchPersonalExpenses();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
-  // 3. Filtering Logic
-  const filteredSharedExpenses = (Array.isArray(sharedExpenses) ? sharedExpenses : [])
-    .filter(exp => exp.description?.toLowerCase().includes(searchTerm.toLowerCase()))
-    .filter(exp => filterCategory === 'All' || exp.category === filterCategory);
+  // Extract all unique past month keys from all available expenses (excluding current month)
+  const pastMonthKeys = useMemo(() => {
+    const allExpenses = [
+      ...(Array.isArray(sharedExpenses) ? sharedExpenses : []),
+      ...(Array.isArray(personalExpenses) ? personalExpenses : [])
+    ];
+    const monthKeysSet = new Set();
+    allExpenses.forEach(exp => {
+      const mKey = getMonthKey(exp.date || exp.createdAt);
+      if (mKey && mKey !== currentMonthKey) {
+        monthKeysSet.add(mKey);
+      }
+    });
+    return Array.from(monthKeysSet).sort((a, b) => b.localeCompare(a));
+  }, [sharedExpenses, personalExpenses, currentMonthKey]);
 
-  const filteredPersonalExpenses = (Array.isArray(personalExpenses) ? personalExpenses : [])
-    .filter(exp => exp.description?.toLowerCase().includes(searchTerm.toLowerCase()))
-    .filter(exp => filterCategory === 'All' || exp.category === filterCategory);
+  // Generic Expense Filtering Pipeline (Search + Category + Month)
+  const filterExpenses = (list) => {
+    return (Array.isArray(list) ? list : [])
+      .filter(exp => exp.description?.toLowerCase().includes(searchTerm.toLowerCase()))
+      .filter(exp => filterCategory === 'All' || exp.category === filterCategory)
+      .filter(exp => {
+        const expMonthKey = getMonthKey(exp.date || exp.createdAt);
+        if (selectedMonth === 'current') {
+          return expMonthKey === currentMonthKey;
+        }
+        if (selectedMonth === 'all') {
+          return true;
+        }
+        return expMonthKey === selectedMonth;
+      });
+  };
+
+  const filteredSharedExpenses = filterExpenses(sharedExpenses);
+  const filteredPersonalExpenses = filterExpenses(personalExpenses);
+
+  // Compute total spent for the currently displayed filtered tab list
+  const currentDisplayedExpenses = activeTab === 'shared' ? filteredSharedExpenses : filteredPersonalExpenses;
+  const totalMonthSpent = useMemo(() => {
+    return currentDisplayedExpenses.reduce((acc, exp) => acc + (Number(exp.totalAmount) || 0), 0);
+  }, [currentDisplayedExpenses]);
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -120,29 +182,95 @@ const Ledger = () => {
         ))}
       </div>
 
-      {/* SEARCH & FILTER BAR (Only show for expenses) */}
+      {/* SEARCH, MONTH & CATEGORY FILTER BAR */}
       {activeTab !== 'recurring' && (
-        <div className="glass-card p-4 mb-6 flex flex-col md:flex-row gap-4 items-center">
-           <div className="relative flex-1 w-full">
-             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" size={18} />
-             <input 
-               className="w-full bg-ui-input border border-ui-border rounded-xl pl-12 pr-4 py-3 text-text-primary focus:outline-none focus:border-brand-accent transition-all placeholder:text-text-muted text-sm"
-               placeholder="Search expenses..."
-               value={searchTerm}
-               onChange={(e) => setSearchTerm(e.target.value)}
-             />
-           </div>
-           <div className="w-full md:w-48">
-             <select
-               value={filterCategory}
-               onChange={(e) => setFilterCategory(e.target.value)}
-               className="w-full bg-ui-input border border-ui-border rounded-xl px-4 py-3 text-text-primary focus:outline-none focus:border-brand-accent transition-all text-sm cursor-pointer"
-             >
-               {['All', 'Food', 'Transport', 'Rent', 'Shopping', 'Entertainment', 'Bills', 'Others'].map(cat => (
-                 <option key={cat} value={cat} className="bg-ui-card">{cat}</option>
-               ))}
-             </select>
-           </div>
+        <div className="space-y-4 mb-6">
+          <div className="glass-card p-4 flex flex-col md:flex-row gap-4 items-center">
+            {/* Search Input */}
+            <div className="relative flex-1 w-full">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" size={18} />
+              <input 
+                className="w-full bg-ui-input border border-ui-border rounded-xl pl-12 pr-4 py-3 text-text-primary focus:outline-none focus:border-brand-accent transition-all placeholder:text-text-muted text-sm"
+                placeholder="Search transactions..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+
+            {/* Month Dropdown / History Selector */}
+            <div className="w-full md:w-64 relative">
+              <div className="relative">
+                <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 text-brand-accent" size={16} />
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="w-full bg-ui-input border border-ui-border rounded-xl pl-10 pr-9 py-3 text-text-primary focus:outline-none focus:border-brand-accent transition-all text-sm font-semibold cursor-pointer appearance-none"
+                >
+                  <option value="current" className="bg-ui-card font-medium text-text-primary">
+                    📅 Current Month ({currentMonthLabel})
+                  </option>
+                  <option value="all" className="bg-ui-card font-medium text-text-primary">
+                    🗓️ All Time History
+                  </option>
+                  {pastMonthKeys.length > 0 && (
+                    <optgroup label="Older Months History" className="bg-ui-card text-text-muted font-bold">
+                      {pastMonthKeys.map((mKey) => (
+                        <option key={mKey} value={mKey} className="bg-ui-card font-medium text-text-primary">
+                          📜 {getMonthLabel(mKey)}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
+                <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" size={16} />
+              </div>
+            </div>
+
+            {/* Category Dropdown */}
+            <div className="w-full md:w-44">
+              <select
+                value={filterCategory}
+                onChange={(e) => setFilterCategory(e.target.value)}
+                className="w-full bg-ui-input border border-ui-border rounded-xl px-4 py-3 text-text-primary focus:outline-none focus:border-brand-accent transition-all text-sm cursor-pointer"
+              >
+                {['All', 'Food', 'Transport', 'Rent', 'Shopping', 'Entertainment', 'Bills', 'Others'].map(cat => (
+                  <option key={cat} value={cat} className="bg-ui-card">{cat}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* MONTHLY SUMMARY HEADER */}
+          <div className="glass-card px-5 py-3.5 flex flex-wrap items-center justify-between gap-3 text-xs border-l-4 border-l-brand-accent">
+            <div className="flex items-center gap-2 flex-wrap">
+              <History size={16} className="text-brand-accent" />
+              <span className="font-bold text-text-primary text-sm">
+                {selectedMonth === 'current'
+                  ? `Current Month (${currentMonthLabel})`
+                  : selectedMonth === 'all'
+                  ? 'All-Time Expense History'
+                  : `History for ${getMonthLabel(selectedMonth)}`}
+              </span>
+              {selectedMonth !== 'current' && (
+                <button
+                  onClick={() => setSelectedMonth('current')}
+                  className="ml-2 text-[11px] font-bold text-brand-accent hover:underline cursor-pointer"
+                >
+                  ← Back to Current Month
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-4 text-text-muted font-medium">
+              <span>
+                Transactions: <strong className="text-text-primary font-bold">{currentDisplayedExpenses.length}</strong>
+              </span>
+              <span>•</span>
+              <span>
+                Total Amount: <strong className="text-brand-accent font-bold">{currency} {totalMonthSpent.toLocaleString()}</strong>
+              </span>
+            </div>
+          </div>
         </div>
       )}
 
@@ -173,9 +301,9 @@ const Ledger = () => {
                       <p className="text-xs text-text-muted flex items-center gap-1.5">
                         <User size={12} /> Created by <span className="text-text-secondary font-medium">{exp.creator?.name || 'Someone'}</span> ({exp.creator?.email})
                       </p>
-                      {exp.date && (
+                      {(exp.date || exp.createdAt) && (
                         <p className="text-[10px] text-text-muted mt-1">
-                          {new Date(exp.date).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                          {new Date(exp.date || exp.createdAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}
                         </p>
                       )}
                     </div>
@@ -211,7 +339,25 @@ const Ledger = () => {
                 );
               })
             ) : (
-              <div className="text-center p-20 text-text-muted">No shared expenses found.</div>
+              <div className="text-center py-16 px-4 glass-card rounded-2xl border border-dashed border-ui-border">
+                <Calendar size={36} className="mx-auto text-text-muted mb-2 opacity-50" />
+                <h3 className="font-bold text-text-primary text-base mb-1">No shared transactions found</h3>
+                <p className="text-xs text-text-muted max-w-sm mx-auto mb-4">
+                  {selectedMonth === 'current' 
+                    ? 'No shared expenses recorded for this month yet.' 
+                    : selectedMonth === 'all'
+                    ? 'No shared expenses found matching your filter.'
+                    : `No shared transactions recorded in ${getMonthLabel(selectedMonth)}.`}
+                </p>
+                {selectedMonth !== 'current' && (
+                  <button
+                    onClick={() => setSelectedMonth('current')}
+                    className="px-4 py-2 bg-brand-accent/15 text-brand-accent rounded-xl text-xs font-bold hover:bg-brand-accent/25 transition-all cursor-pointer"
+                  >
+                    View Current Month
+                  </button>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -252,9 +398,9 @@ const Ledger = () => {
                       ) : (
                         exp.note && <p className="text-xs text-text-secondary italic">"{exp.note}"</p>
                       )}
-                      {exp.date && (
+                      {(exp.date || exp.createdAt) && (
                         <p className="text-[10px] text-text-muted mt-1">
-                          {new Date(exp.date).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                          {new Date(exp.date || exp.createdAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}
                         </p>
                       )}
                     </div>
@@ -281,7 +427,25 @@ const Ledger = () => {
                 );
               })
             ) : (
-              <div className="text-center p-20 text-text-muted">No personal expenses found.</div>
+              <div className="text-center py-16 px-4 glass-card rounded-2xl border border-dashed border-ui-border">
+                <Calendar size={36} className="mx-auto text-text-muted mb-2 opacity-50" />
+                <h3 className="font-bold text-text-primary text-base mb-1">No personal transactions found</h3>
+                <p className="text-xs text-text-muted max-w-sm mx-auto mb-4">
+                  {selectedMonth === 'current' 
+                    ? 'No personal expenses recorded for this month yet.' 
+                    : selectedMonth === 'all'
+                    ? 'No personal expenses found matching your filter.'
+                    : `No personal transactions recorded in ${getMonthLabel(selectedMonth)}.`}
+                </p>
+                {selectedMonth !== 'current' && (
+                  <button
+                    onClick={() => setSelectedMonth('current')}
+                    className="px-4 py-2 bg-brand-accent/15 text-brand-accent rounded-xl text-xs font-bold hover:bg-brand-accent/25 transition-all cursor-pointer"
+                  >
+                    View Current Month
+                  </button>
+                )}
+              </div>
             )}
           </div>
         )}

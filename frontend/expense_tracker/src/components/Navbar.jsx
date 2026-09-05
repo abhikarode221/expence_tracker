@@ -36,7 +36,7 @@ const Navbar = () => {
         };
 
         const { data } = await axios.get(
-          'http://localhost:5000/api/notifications',
+          `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/notifications`,
           config
         );
 
@@ -60,7 +60,7 @@ const Navbar = () => {
       };
 
       await axios.put(
-        `http://localhost:5000/api/notifications/${id}/read`,
+        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/notifications/${id}/read`,
         {},
         config
       );
@@ -89,7 +89,7 @@ const Navbar = () => {
       };
 
       await axios.put(
-        'http://localhost:5000/api/notifications/read-all',
+        `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/notifications/read-all`,
         {},
         config
       );

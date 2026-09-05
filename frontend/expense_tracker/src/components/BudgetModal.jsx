@@ -11,7 +11,7 @@ const BudgetModal = ({ isOpen, onClose, currentBudget, onBudgetUpdate }) => {
       const userInfo = JSON.parse(localStorage.getItem('userInfo'));
       const config = { headers: { Authorization: `Bearer ${userInfo.token}` } };
       
-      const { data } = await axios.put('http://localhost:5000/api/users/budget', { monthlyBudget: Number(budget) }, config);
+      const { data } = await axios.put(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/users/budget`, { monthlyBudget: Number(budget) }, config);
       
       // Update local storage so the rest of the app knows the new budget
       localStorage.setItem('userInfo', JSON.stringify({ ...userInfo, monthlyBudget: data.monthlyBudget }));

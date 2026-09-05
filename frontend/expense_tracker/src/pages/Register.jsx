@@ -14,9 +14,9 @@ const Register = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      const { data } = await axios.post('http://localhost:5000/api/users/register', { name, email, password });
+      const { data } = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/users/register`, { name, email, password });
       localStorage.setItem('userInfo', JSON.stringify(data));
-     window.location.href = '/dashboard';
+      window.location.href = '/dashboard';
     } catch (error) {
       alert(error.response?.data?.message || "Registration failed");
     } finally {
@@ -27,9 +27,9 @@ const Register = () => {
   return (
     <div className="min-h-screen bg-ui-bg flex items-center justify-center p-6">
       <div className="glass-card w-full max-w-md p-8 relative overflow-hidden border-t-4 border-t-brand-accent">
-        
+
         <div className="relative z-10">
-          <h1 className="text-3xl font-black text-text-primary mb-2 tracking-tighter">Join Mine.</h1>
+          <h1 className="text-3xl font-black text-text-primary mb-2 tracking-tighter">Join Spendwise</h1>
           <p className="text-text-muted text-sm mb-8">Start tracking and splitting in seconds.</p>
 
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -37,8 +37,8 @@ const Register = () => {
               <label className="block text-xs font-bold text-text-muted uppercase mb-2 tracking-widest">Full Name</label>
               <div className="relative">
                 <User className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" size={18} />
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   required
                   className="w-full bg-ui-input border border-ui-border rounded-xl pl-12 pr-4 py-3 text-text-primary focus:border-brand-accent outline-none transition-all"
                   placeholder="Abhishek Karode"
@@ -52,8 +52,8 @@ const Register = () => {
               <label className="block text-xs font-bold text-text-muted uppercase mb-2 tracking-widest">Email Address</label>
               <div className="relative">
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" size={18} />
-                <input 
-                  type="email" 
+                <input
+                  type="email"
                   required
                   className="w-full bg-ui-input border border-ui-border rounded-xl pl-12 pr-4 py-3 text-text-primary focus:border-brand-accent outline-none transition-all"
                   placeholder="name@example.com"
@@ -67,8 +67,8 @@ const Register = () => {
               <label className="block text-xs font-bold text-text-muted uppercase mb-2 tracking-widest">Create Password</label>
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" size={18} />
-                <input 
-                  type="password" 
+                <input
+                  type="password"
                   required
                   className="w-full bg-ui-input border border-ui-border rounded-xl pl-12 pr-4 py-3 text-text-primary focus:border-brand-accent outline-none transition-all"
                   placeholder="Minimum 6 characters"
@@ -78,7 +78,7 @@ const Register = () => {
               </div>
             </div>
 
-            <button 
+            <button
               disabled={loading}
               className="w-full bg-brand-accent hover:bg-indigo-600 text-white font-bold py-4 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2"
             >

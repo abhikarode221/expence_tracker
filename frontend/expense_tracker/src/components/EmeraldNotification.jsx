@@ -21,7 +21,7 @@ const EmeraldNotification = () => {
         };
 
         const { data } = await axios.get(
-          'http://localhost:5000/api/expenses/shared',
+          `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/expenses/shared`,
           config
         );
 
