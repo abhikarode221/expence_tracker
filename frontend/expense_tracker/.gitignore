@@ -26,5 +26,6 @@ dist-ssr
 # Environment & Cache
 .env
 .env.*
+!.env.example
 .firebase/
 
